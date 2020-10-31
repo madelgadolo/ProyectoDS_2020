@@ -6,15 +6,16 @@ from django.contrib.auth import login
 # Importamos forms.py
 from .forms import *
 #Importamos las clases recien creadas
-from .models import Cliente, Colaborador, Profile, Producto
+from .models import *
 
+####### TODAS LAS VISTAS QUE REGISTREMOS TIENEN QUE ESTAR MATRICULADAS EN URLS.PY
 class HomePageView(TemplateView):
 
-    template_name = "main/home.html"
+    template_name = "main/home.html" #html a mostrar
 
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['latest_products'] = Producto.objects.all()[:5]
+        context = super().get_context_data(**kwargs) 
+        context['latest_products'] = Producto.objects.all()[:5] #mostrar los ultimos 5 productos
 
         return context
 
@@ -30,7 +31,7 @@ class ProductDetailView(DetailView):
 class RegistrationView(FormView): #Formulario de registro de usuarios
     template_name = 'registration/register.html'
     form_class = UserForm
-    success_url = reverse_lazy('index')
+    success_url = reverse_lazy('home') #buscar en el arcivo urls cual es la vista home
 
     def form_valid(self, form): #Se activa cuando nuestro ususario se registra con datos correctos
         # This methos is called when valid from data has been POSTed
@@ -83,4 +84,4 @@ class RegistrationView(FormView): #Formulario de registro de usuarios
         # Login the user
         login(self.request, user)
 
-        return super().form_valid(form)
+        return super().form_valid(form) #te llleva al success url osea home
