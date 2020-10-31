@@ -74,7 +74,7 @@ class Producto(models.Model):
         return self.nombre
 
     #Calcular el precio final del producto
-    def precio_final(self):
+    def get_precio_final(self):
         return self.precio * (1 - self.descuento)
 
     #Generar un codigo Stock Keeping Unit
@@ -93,3 +93,41 @@ class Cliente(models.Model):
 
     def __str__(self):
         return f'Cliente: {self.user_profile.user.get_username()}'
+
+class Pedido(models.Model):
+    # Relaciones
+    cliente = models.ForeignKey('Cliente', on_delete=models.CASCADE) #si borro un cliente se borran todos los pedidos
+    repartidor = models.ForeignKey('Colaborador', on_delete=models.SET_NULL, null=True) #si se elimina solo se queda el campo vacío, no se elimina el pedido
+    ubicacion = models.ForeignKey('Localizacion', on_delete=models.SET_NULL, null=True) # ""
+
+    # Atributos
+    fecha_creacion = models.DateTimeField(auto_now=True)
+    fecha_entrega = models.DateTimeField(blank=True, null=True)
+    estado = models.CharField(max_length=3)
+    direccion_entrega = models.CharField(max_length=100, blank=True, null=True)
+    tarifa = models.FloatField(blank=True, null=True)
+
+    def __str__(self):
+        return f'{self.cliente} - {self.fecha_creacion} - {self.estado}'
+
+    def get_total(self):
+        detalles = self.detallepedido_set.all()
+        total = 0
+        for detalle in detalles:
+            total += detalle.get_subtotal()
+        total += self.tarifa
+        return total
+
+class DetallePedido(models.Model):
+    # Relaciones
+    producto = models.ForeignKey('Producto', on_delete=models.CASCADE)
+    pedido = models.ForeignKey('Pedido', on_delete=models.CASCADE)
+
+    # Atributos
+    cantidad = models.IntegerField(blank=True, null=True)
+
+    def __str__(self):
+        return f'{self.pedido.id} - {self.cantidad} x {self.producto.nombre}'
+
+    def get_subtotal(self):
+        return self.producto.get_precio_final() * self.cantidad

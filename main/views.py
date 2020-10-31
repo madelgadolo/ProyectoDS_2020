@@ -1,14 +1,19 @@
-from django.shortcuts import render
-from django.http import HttpResponse
-from django.views.generic import ListView, DetailView, FormView, TemplateView
+from django.shortcuts import render , redirect
+#from django.http import HttpResponse
+from django.views.generic import ListView, DetailView, FormView, TemplateView, View, UpdateView
 from django.urls import reverse_lazy
 from django.contrib.auth import login
+from django.contrib import messages
+from django.db.models import F
+
+# imports random module 
+import random 
 # Importamos forms.py
 from .forms import *
 #Importamos las clases recien creadas
 from .models import *
 
-####### TODAS LAS VISTAS QUE REGISTREMOS TIENEN QUE ESTAR MATRICULADAS EN URLS.PY
+####### TODAS LAS VISTAS QUE REGISTREMOS TIENEN QUE ESTAR relacionadas a un path EN URLS.PY
 class HomePageView(TemplateView):
 
     template_name = "main/home.html" #html a mostrar
@@ -85,3 +90,112 @@ class RegistrationView(FormView): #Formulario de registro de usuarios
         login(self.request, user)
 
         return super().form_valid(form) #te llleva al success url osea home
+
+class AddToCartView(View):
+    def get(self, request, product_pk):
+        # Obten el cliente
+        user_profile = Profile.objects.get(user=request.user)
+        cliente = Cliente.objects.get(user_profile=user_profile)
+        # Obtén el producto que queremos añadir al carrito
+        producto = Producto.objects.get(pk=product_pk)
+        # Obtén/Crea un/el pedido en proceso (EP) del usuario
+        pedido, _  = Pedido.objects.get_or_create(cliente=cliente, estado='EP')
+        # Obtén/Crea un/el detalle de pedido
+        detalle_pedido, created = DetallePedido.objects.get_or_create(
+            producto=producto,
+            pedido=pedido,
+        )
+
+        # Si el detalle de pedido es creado la cantidad es 1
+        # Si no sumamos 1 a la cantidad actual
+        if created:
+            detalle_pedido.cantidad = 1
+        else:
+            detalle_pedido.cantidad = F('cantidad') + 1
+        # Guardamos los cambios
+        detalle_pedido.save()
+        # Recarga la página
+        return redirect(request.META['HTTP_REFERER'])
+
+class RemoveFromCartView(View):
+    def get(self, request, product_pk):
+        # Obten el cliente
+        user_profile = Profile.objects.get(user=request.user)
+        cliente = Cliente.objects.get(user_profile=user_profile)
+        # Obtén el producto que queremos añadir al carrito
+        producto = Producto.objects.get(pk=product_pk)
+        # Obtén/Crea un/el pedido en proceso (EP) del usuario
+        pedido, _  = Pedido.objects.get_or_create(cliente=cliente, estado='EP')
+        # Obtén/Crea un/el detalle de pedido
+        detalle_pedido = DetallePedido.objects.get(
+            producto=producto,
+            pedido=pedido,
+        )
+        # Si la cantidad actual menos 1 es 0 elmina el producto del carrito
+        # Si no restamos 1 a la cantidad actual
+        if detalle_pedido.cantidad - 1 == 0:
+            detalle_pedido.delete()
+        else:
+            detalle_pedido.cantidad = F('cantidad') - 1
+            # Guardamos los cambios
+            detalle_pedido.save()
+        # Recarga la página
+        return redirect(request.META['HTTP_REFERER'])
+
+
+class PedidoDetailView(DetailView):
+    model = Pedido
+
+    def get_object(self):
+        # Obten el cliente
+        user_profile = Profile.objects.get(user=self.request.user)
+        cliente = Cliente.objects.get(user_profile=user_profile)
+        # Obtén/Crea un/el pedido en proceso (EP) del usuario
+        pedido  = Pedido.objects.get(cliente=cliente, estado='EP')
+        return pedido
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['detalles'] = context['object'].detallepedido_set.all()
+        return context
+
+class PedidoUpdateView(UpdateView):
+    model = Pedido
+    fields = ['ubicacion', 'direccion_entrega']
+    success_url = reverse_lazy('payment')
+
+    def form_valid(self, form):
+        # This method is called when valid form data has been POSTed.
+        # It should return an HttpResponse.
+        self.object = form.save(commit=False)
+        # Calculo de tarifa
+        self.object.tarifa = random.randint(5, 20)
+        return super().form_valid(form)
+
+class PaymentView(TemplateView):
+    template_name = "main/payment.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Obten el cliente
+        user_profile = Profile.objects.get(user=self.request.user)
+        cliente = Cliente.objects.get(user_profile=user_profile)
+        context['pedido'] = Pedido.objects.get(cliente=cliente, estado='EP')
+
+        return context
+
+class CompletePaymentView(View):
+    def get(self, request):
+        # Obten el cliente
+        user_profile = Profile.objects.get(user=request.user)
+        cliente = Cliente.objects.get(user_profile=user_profile)
+        # Obtén/Crea un/el pedido en proceso (EP) del usuario
+        pedido = Pedido.objects.get(cliente=cliente, estado='EP')
+        # Cambia el estado del pedido
+        pedido.estado = 'PAG'
+        # Asignacion de repartidor
+        pedido.repartidor = Colaborador.objects.order_by('?').first() #ordena aleatoriamente
+        # Guardamos los cambios
+        pedido.save()
+        messages.success(request, 'Gracias por tu compra! Un repartidor ha sido asignado a tu pedido.')
+        return redirect('home')

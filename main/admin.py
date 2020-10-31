@@ -21,4 +21,6 @@ admin.site.register(Categoria)
 admin.site.register(Proveedor)
 admin.site.register(Cliente)
 admin.site.register(Colaborador)
+admin.site.register(Pedido)
+admin.site.register(DetallePedido)
 admin.site.register(Profile, ProfileAdmin) #Modelo profile y clase profileadmin
